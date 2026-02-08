@@ -101,25 +101,24 @@ def root():
 # OAuth endpoints
 # -------------------------
 @app.get("/auth/polar/start")
+from urllib.parse import urlencode
+from fastapi.responses import RedirectResponse
+
+@app.get("/auth/polar/start")
 def polar_oauth_start():
-    """
-    Redirects you to Polar consent screen.
-    For personal use, state can be simple. For multi-user, store state in DB.
-    """
     _require_config()
     state = f"personal:{int(time.time())}"
 
-    url = (
-        "https://flow.polar.com/oauth2/authorization"
-        f"?response_type=code"
-        f"&client_id={POLAR_CLIENT_ID}"
-        f"&redirect_uri={POLAR_REDIRECT_URI}"
-        f"&state={state}"
-    )
-    print("POLAR_REDIRECT_URI =", POLAR_REDIRECT_URI)
-    print("AUTH_URL =", url)
+    query = urlencode({
+        "response_type": "code",
+        "client_id": POLAR_CLIENT_ID,
+        "redirect_uri": POLAR_REDIRECT_URI,
+        "state": state,
+    })
 
-    return RedirectResponse(url) 
+    url = f"https://flow.polar.com/oauth2/authorization?{query}"
+    return RedirectResponse(url)
+
 
 @app.get("/auth/polar/callback")
 def polar_oauth_callback(request: Request):
