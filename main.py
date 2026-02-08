@@ -321,3 +321,22 @@ def polar_sync():
     _refresh_token_if_needed()
     _register_user_if_needed()
     return {"ok": True}
+
+@app.get("/polar/debug/exercises")
+def debug_exercises():
+    _refresh_token_if_needed()
+    _register_user_if_needed()
+
+    r = requests.get(
+        "https://www.polaraccesslink.com/v3/exercises",
+        headers=_polar_headers(),
+        timeout=20,
+    )
+
+    return {
+        "status": r.status_code,
+        "text": r.text[:2000],   # cap it so it’s safe
+        "json_type": str(type(r.json()).__name__) if r.status_code < 400 else None,
+        "json": r.json() if r.status_code < 400 else None,
+    }
+
