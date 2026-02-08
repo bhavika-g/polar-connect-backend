@@ -94,15 +94,6 @@ def _refresh_token_if_needed():
 
 
 def _register_user_if_needed() -> Optional[str]:
-    """
-    REQUIRED by Polar 'How to get started' step 7.
-    POST /v3/users with Bearer access-token. Content-Type: application/xml, Accept: application/json.
-    409 = already registered.
-    """
-    # If we already have a user id stored, assume registration done.
-    if TOKEN_STORE.get("polar_user_id"):
-        return TOKEN_STORE["polar_user_id"]
-
     r = requests.post(
         "https://www.polaraccesslink.com/v3/users",
         headers={
@@ -110,25 +101,31 @@ def _register_user_if_needed() -> Optional[str]:
             "Accept": "application/json",
             "Content-Type": "application/xml",
         },
-        data="",  # empty body per docs example
+        data="",
         timeout=20,
     )
 
+    # ✅ 409 = already registered (treat as OK)
     if r.status_code == 409:
-        # Already registered; Polar may not return user-id here.
-        # In a real implementation you would persist user-id on first successful registration.
         return TOKEN_STORE.get("polar_user_id")
 
     if r.status_code >= 400:
-        try:
-            raise HTTPException(status_code=400, detail={"register_user_failed": r.json()})
-        except Exception:
-            raise HTTPException(status_code=400, detail={"register_user_failed": r.text})
+        # expose exact reason
+        raise HTTPException(
+            status_code=400,
+            detail={
+                "register_user_failed": {
+                    "status": r.status_code,
+                    "body": r.text
+                }
+            },
+        )
 
     data = r.json()
     user_id = data.get("user-id") or data.get("user_id") or data.get("id")
     TOKEN_STORE["polar_user_id"] = user_id
     return user_id
+
 
 
 def _date_in_range(date_yyyy_mm_dd: str, start: str, end: str) -> bool:
@@ -211,11 +208,14 @@ def polar_oauth_callback(request: Request):
         _register_user_if_needed()
     except HTTPException:
         # If registration fails, keep tokens but report problem
+       
         return {
-            "ok": False,
-            "message": "OAuth succeeded but user registration failed. Check /polar/status and logs.",
-            "token_expires_in": max(0, TOKEN_STORE["expires_at"] - int(time.time())),
-        }
+        "ok": False,
+        "message": "OAuth succeeded but user registration failed. See error for details.",
+        "error": e.detail,
+        "token_expires_in": max(0, TOKEN_STORE["expires_at"] - int(time.time())),
+    }
+
 
     return {
         "ok": True,
