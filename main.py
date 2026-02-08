@@ -116,7 +116,10 @@ def polar_oauth_start():
         f"&redirect_uri={POLAR_REDIRECT_URI}"
         f"&state={state}"
     )
-    return RedirectResponse(url)
+    print("POLAR_REDIRECT_URI =", POLAR_REDIRECT_URI)
+    print("AUTH_URL =", url)
+
+    return RedirectResponse(url) 
 
 @app.get("/auth/polar/callback")
 def polar_oauth_callback(request: Request):
