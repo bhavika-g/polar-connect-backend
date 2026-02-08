@@ -7,6 +7,8 @@ import requests
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import RedirectResponse
 from dotenv import load_dotenv
+from urllib.parse import urlencode
+from fastapi.responses import RedirectResponse
 
 load_dotenv()
 
@@ -100,9 +102,8 @@ def root():
 # -------------------------
 # OAuth endpoints
 # -------------------------
-@app.get("/auth/polar/start")
-from urllib.parse import urlencode
-from fastapi.responses import RedirectResponse
+
+
 
 @app.get("/auth/polar/start")
 def polar_oauth_start():
