@@ -222,6 +222,7 @@ def polar_oauth_callback(request: Request):
 # -------------------------------------------------------------------
 # Workouts (real endpoint stub)
 # -------------------------------------------------------------------
+
 @app.get("/polar/workouts")
 def polar_workouts(
     from_date: Optional[str] = Query(None, alias="from_date"),
@@ -234,31 +235,59 @@ def polar_workouts(
 
     start = from_alias or from_date
     if not start:
-        raise HTTPException(status_code=422, detail="Missing from_date")
+        raise HTTPException(status_code=422, detail="Missing from_date (or from)")
 
+    # 1) List exercises
     list_resp = requests.get(
         "https://www.polaraccesslink.com/v3/exercises",
         headers=_polar_headers(),
         timeout=20,
     )
+    if list_resp.status_code >= 400:
+        raise HTTPException(
+            status_code=list_resp.status_code,
+            detail={"list_exercises_failed": list_resp.text},
+        )
 
-    exercises = list_resp.json().get("exercises", [])
+    data = list_resp.json()
+
+    # Polar may return either:
+    #   - {"exercises": [...]}  (dict)
+    #   - [...]                (list)
+    if isinstance(data, list):
+        exercises = data
+    elif isinstance(data, dict):
+        exercises = data.get("exercises", [])
+    else:
+        exercises = []
+
     workouts = []
 
+    # 2) Fetch details for each exercise, filter by date range
     for ex in exercises:
+        if not isinstance(ex, dict):
+            continue
+
         ex_id = ex.get("id")
         if not ex_id:
             continue
 
-        d = requests.get(
+        d_resp = requests.get(
             f"https://www.polaraccesslink.com/v3/exercises/{ex_id}",
             headers=_polar_headers(),
             timeout=20,
-        ).json()
-
-        start_time = d.get("start-time") or d.get("startTime")
-        if start_time and not _date_in_range(start_time[:10], start, to):
+        )
+        if d_resp.status_code >= 400:
+            # Skip broken items rather than failing the whole request
             continue
+
+        d = d_resp.json()
+
+        start_time = d.get("start-time") or d.get("startTime") or d.get("start_time")
+        if start_time:
+            date_part = str(start_time)[:10]
+            if not _date_in_range(date_part, start, to):
+                continue
 
         workouts.append(
             {
@@ -274,7 +303,7 @@ def polar_workouts(
         if len(workouts) >= limit:
             break
 
-    return {"workouts": workouts, "count": len(workouts)}
+    return {"workouts": workouts, "count": len(workouts), "from": start, "to": to}
 
 
 # -------------------------------------------------------------------
